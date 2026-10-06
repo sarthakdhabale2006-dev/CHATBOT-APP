@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Local AI Chat - Fast, private local inference powered by Gemma 4 12B QAT." />
+  <title>Local AI Chat - Gemma 4 12B QAT</title>
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%3E<text y=%2226%22 font-size=%2224%22>⚡</text></svg>" />
+</head>
+<body>
+  <!-- Accessibility Skip Link -->
+  <a href="#chat-input" class="skip-link">Skip to chat input</a>
+
+  <div class="app-container" id="app-container">
+    <!-- Sidebar Overlay (Mobile) -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar" aria-label="Chat sidebar">
+      <!-- Sidebar Header -->
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1 class="brand-title">Local AI Chat</h1>
+            <span class="brand-subtitle" id="sidebar-model-subtitle">Gemma 4 12B QAT</span>
+          </div>
+        </div>
+        <button type="button" class="icon-btn collapse-btn desktop-only" id="collapse-sidebar-btn" aria-label="Collapse sidebar" title="Collapse sidebar (Ctrl+[)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+            <path d="M15 10l-2 2 2 2"></path>
+          </svg>
+        </button>
+        <button type="button" class="icon-btn mobile-close-btn mobile-only" id="mobile-close-sidebar-btn" aria-label="Close sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Action: New Chat -->
+      <div class="sidebar-actions">
+        <button type="button" class="btn btn-primary new-chat-btn" id="new-chat-btn" aria-label="Start a new chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>New Chat</span>
+          <kbd class="shortcut-kbd">Ctrl+N</kbd>
+        </button>
+      </div>
+
+      <!-- Search Chats -->
+      <div class="search-box-wrapper">
+        <div class="search-input-group">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input 
+            type="search" 
+            id="search-chats-input" 
+            class="search-input" 
+            placeholder="Search conversations..." 
+            aria-label="Search conversations"
+            autocomplete="off"
+          />
+          <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="Clear search" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat History List -->
+      <nav class="chat-history-container" aria-label="Chat history">
+        <div class="chat-history-scroll" id="chat-history-list" role="list">
+          <!-- Dynamically populated via script.js -->
+        </div>
+        <div class="history-empty-state" id="history-empty-state" hidden>
+          <p>No conversations found</p>
+        </div>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <button type="button" class="sidebar-footer-item connection-status-trigger" id="footer-connection-btn" aria-label="Backend status">
+          <span class="status-indicator-dot status-disconnected" id="footer-status-dot" aria-hidden="true"></span>
+          <span class="footer-item-label" id="footer-status-text">127.0.0.1:8000</span>
+        </button>
+        <button type="button" class="sidebar-footer-item" id="open-settings-btn" aria-label="Open settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span class="footer-item-label">Settings</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-area" id="main-area">
+      <!-- Top Navigation Header -->
+      <header class="chat-header" role="banner">
+        <div class="header-left">
+          <!-- Mobile Sidebar Hamburger -->
+          <button type="button" class="icon-btn mobile-menu-btn mobile-only" id="mobile-menu-btn" aria-label="Open sidebar menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          
+          <!-- Expand Sidebar Button (when desktop sidebar collapsed) -->
+          <button type="button" class="icon-btn expand-sidebar-btn desktop-only" id="expand-sidebar-btn" aria-label="Expand sidebar" title="Expand sidebar" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+              <path d="M13 10l2 2-2 2"></path>
+            </svg>
+          </button>
+
+          <!-- Current Chat Details -->
+          <div class="chat-meta">
+            <div class="chat-title-row">
+              <h2 class="active-chat-title" id="active-chat-title" title="Click to rename">New Conversation</h2>
+              <button type="button" class="icon-btn-inline rename-current-btn" id="rename-current-btn" aria-label="Rename conversation" title="Rename conversation">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="model-meta-info">
+              <span class="active-model-name" id="header-model-name">Gemma 4 12B QAT</span>
+              <span class="meta-separator" aria-hidden="true">·</span>
+              <button type="button" class="status-button" id="header-status-btn" aria-label="Backend connection status">
+                <span class="status-indicator-dot status-disconnected" id="header-status-dot" aria-hidden="true"></span>
+                <span id="header-status-label">Local Backend (Offline)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Header Actions -->
+        <div class="header-right">
+          <button type="button" class="icon-btn" id="theme-toggle-btn" aria-label="Toggle dark/light theme" title="Toggle theme">
+            <!-- Sun icon (shown in dark theme) -->
+            <svg class="theme-icon sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <!-- Moon icon (shown in light theme) -->
+            <svg class="theme-icon moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+          
+          <button type="button" class="icon-btn" id="export-chat-btn" aria-label="Export conversation" title="Export conversation as Markdown">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+
+          <button type="button" class="icon-btn" id="clear-chat-btn" aria-label="Clear messages in this chat" title="Clear messages in chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+
+          <button type="button" class="icon-btn" id="header-settings-btn" aria-label="Open settings" title="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Messages Viewport -->
+      <section class="messages-viewport" id="messages-viewport" aria-live="polite" aria-label="Conversation messages">
+        <!-- Empty State Screen -->
+        <div class="empty-state-screen" id="empty-state-screen">
+          <div class="empty-state-content">
+            <div class="empty-state-hero-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </div>
+            <h2 class="empty-state-title">Local AI Chat</h2>
+            <p class="empty-state-subtitle">Powered by <span class="highlight-text" id="empty-state-model-name">Gemma 4 12B QAT</span></p>
+            <p class="empty-state-desc">
+              High-throughput offline inference using Quantization-Aware Trained Gemma weights. Zero data leaves your machine.
+            </p>
+
+            <!-- Backend status callout -->
+            <div class="backend-status-callout" id="backend-status-callout">
+              <div class="callout-indicator">
+                <span class="status-indicator-dot status-disconnected" id="empty-callout-dot"></span>
+                <span class="callout-title" id="empty-callout-text">Backend Status: Standby</span>
+              </div>
+              <p class="callout-desc">
+                Ready for local API connection at <code class="inline-code">http://127.0.0.1:8000/api/chat</code>. 
+                Configure model settings or send a prompt below.
+              </p>
+              <div class="callout-actions">
+                <button type="button" class="btn btn-sm btn-outline" id="callout-check-btn">
+                  Check Backend Connection
+                </button>
+                <button type="button" class="btn btn-sm btn-outline" id="callout-settings-btn">
+                  Configure Settings
+                </button>
+              </div>
+            </div>
+
+            <!-- Starter Prompt Suggestions -->
+            <div class="starter-prompts-grid">
+              <button type="button" class="starter-prompt-card" data-prompt="Explain how Quantization-Aware Training (QAT) preserves model accuracy at 4-bit precision.">
+                <div class="prompt-card-header">
+                  <span class="prompt-icon">⚡</span>
+                  <span class="prompt-category">Architecture</span>
+                </div>
+                <p class="prompt-card-text">Explain how Quantization-Aware Training (QAT) preserves model accuracy at 4-bit precision.</p>
+              </button>
+
+              <button type="button" class="starter-prompt-card" data-prompt="Write a high-performance Python script to benchmark token generation latency on CPU and GPU.">
+                <div class="prompt-card-header">
+                  <span class="prompt-icon">💻</span>
+                  <span class="prompt-category">Code</span>
+                </div>
+                <p class="prompt-card-text">Write a Python script to benchmark token generation latency on CPU and GPU.</p>
+              </button>
+
+              <button type="button" class="starter-prompt-card" data-prompt="Compare Gemma 4 12B against Gemma 2 9B in reasoning and memory footprint.">
+                <div class="prompt-card-header">
+                  <span class="prompt-icon">⚖️</span>
+                  <span class="prompt-category">Analysis</span>
+                </div>
+                <p class="prompt-card-text">Compare Gemma 4 12B against Gemma 2 9B in reasoning and memory footprint.</p>
+              </button>
+
+              <button type="button" class="starter-prompt-card" data-prompt="How do I set up a local FastAPI server to stream SSE responses with Gemma?">
+                <div class="prompt-card-header">
+                  <span class="prompt-icon">🛠️</span>
+                  <span class="prompt-category">Integration</span>
+                </div>
+                <p class="prompt-card-text">How do I set up a local FastAPI server to stream SSE responses with Gemma?</p>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div class="messages-list" id="messages-list" role="list">
+          <!-- Dynamically populated via script.js -->
+        </div>
+
+        <!-- Typing / Streaming Indicator Container -->
+        <div class="typing-indicator-container" id="typing-indicator" hidden aria-label="AI is thinking">
+          <div class="message-row assistant-message">
+            <div class="message-avatar assistant-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </div>
+            <div class="message-body">
+              <div class="message-sender-line">
+                <span class="sender-name">Gemma 4 12B QAT</span>
+                <span class="sender-status-text">Thinking...</span>
+              </div>
+              <div class="typing-bubble">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Scroll to Bottom Button -->
+      <button type="button" class="scroll-bottom-btn" id="scroll-bottom-btn" aria-label="Scroll to newest message" title="Scroll to bottom" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      <!-- Chat Input Area -->
+      <footer class="chat-input-area" role="contentinfo">
+        <div class="chat-input-container">
+          <form class="chat-form" id="chat-form" onsubmit="return false;">
+            <div class="textarea-wrapper">
+              <textarea
+                id="chat-input"
+                class="chat-textarea"
+                placeholder="Message Gemma 4 12B QAT... (Press Enter to send, Shift+Enter for new line)"
+                rows="1"
+                aria-label="Message Gemma 4 12B QAT"
+                autocomplete="off"
+              ></textarea>
+            </div>
+
+            <div class="input-actions-bar">
+              <div class="input-actions-left">
+                <!-- Status badge / quick info -->
+                <span class="input-info-hint" id="input-model-hint">
+                  <span class="pulse-dot"></span> Local Inference
+                </span>
+              </div>
+
+              <div class="input-actions-right">
+                <!-- Stop Generation Button (visible only when generating) -->
+                <button type="button" class="btn btn-secondary stop-generation-btn" id="stop-generation-btn" aria-label="Stop generation" hidden>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                  </svg>
+                  <span>Stop</span>
+                </button>
+
+                <!-- Send Button -->
+                <button type="submit" class="btn btn-primary send-btn" id="send-btn" aria-label="Send message" disabled>
+                  <span>Send</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="input-disclaimer">
+          <span>Local AI Chat</span>
+          <span aria-hidden="true">·</span>
+          <span>Gemma 4 12B QAT</span>
+          <span aria-hidden="true">·</span>
+          <span>Target: <code class="footer-code" id="footer-endpoint-display">http://127.0.0.1:8000/api/chat</code></span>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Settings Modal Dialog -->
+  <div class="modal-backdrop" id="settings-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2 class="modal-title" id="settings-dialog-title">Settings</h2>
+          <p class="modal-subtitle">Configure model inference, appearance, and local endpoints</p>
+        </div>
+        <button type="button" class="icon-btn modal-close-btn" id="close-settings-btn" aria-label="Close settings dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Section: Model Settings -->
+        <div class="settings-section">
+          <h3 class="settings-section-title">Model Configuration</h3>
+          
+          <div class="setting-item">
+            <div class="setting-item-label-group">
+              <label for="setting-model-name" class="setting-label">Model Name</label>
+              <span class="setting-desc">Identifier displayed in header and message headers</span>
+            </div>
+            <input type="text" id="setting-model-name" class="form-input" value="Gemma 4 12B QAT" />
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-item-label-group">
+              <label for="setting-backend-url" class="setting-label">Backend API Endpoint</label>
+              <span class="setting-desc">Local backend server URL for chat inference requests</span>
+            </div>
+            <div class="input-with-action">
+              <input type="url" id="setting-backend-url" class="form-input" value="http://127.0.0.1:8000/api/chat" />
+              <button type="button" class="btn btn-outline btn-sm" id="test-connection-btn">
+                Test Connection
+              </button>
+            </div>
+            <div class="connection-test-result" id="connection-test-result" hidden></div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-item-label-group">
+              <label for="setting-system-prompt" class="setting-label">System Prompt</label>
+              <span class="setting-desc">Default instructions passed to the local Gemma model</span>
+            </div>
+            <textarea id="setting-system-prompt" class="form-textarea" rows="3" placeholder="You are Gemma 4, an advanced AI assistant created by Google. You are helpful, precise, and thoughtful."></textarea>
+          </div>
+        </div>
+
+        <!-- Section: Inference Controls -->
+        <div class="settings-section">
+          <h3 class="settings-section-title">Inference & Streaming</h3>
+
+          <div class="setting-item setting-item-row">
+            <div class="setting-item-label-group">
+              <label for="setting-streaming-toggle" class="setting-label">Stream Response</label>
+              <span class="setting-desc">Display tokens progressively via Server-Sent Events (SSE)</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-streaming-toggle" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-item-label-group">
+              <div class="slider-label-row">
+                <label for="setting-temperature" class="setting-label">Temperature</label>
+                <span class="slider-value" id="temperature-val-display">0.7</span>
+              </div>
+              <span class="setting-desc">Higher values produce more creative output, lower values more deterministic</span>
+            </div>
+            <input type="range" id="setting-temperature" class="form-range" min="0" max="1.5" step="0.05" value="0.7" />
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-item-label-group">
+              <div class="slider-label-row">
+                <label for="setting-max-tokens" class="setting-label">Max Tokens</label>
+                <span class="slider-value" id="max-tokens-val-display">2048</span>
+              </div>
+              <span class="setting-desc">Maximum generation token limit per response</span>
+            </div>
+            <input type="range" id="setting-max-tokens" class="form-range" min="256" max="8192" step="256" value="2048" />
+          </div>
+        </div>
+
+        <!-- Section: Appearance -->
+        <div class="settings-section">
+          <h3 class="settings-section-title">Appearance</h3>
+          <div class="setting-item">
+            <div class="setting-item-label-group">
+              <label class="setting-label">Interface Theme</label>
+              <span class="setting-desc">Choose dark, light, or sync with operating system</span>
+            </div>
+            <div class="theme-options-group" role="radiogroup" aria-label="Theme selection">
+              <button type="button" class="theme-option-btn" data-theme-val="dark" role="radio" aria-checked="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                <span>Dark</span>
+              </button>
+              <button type="button" class="theme-option-btn" data-theme-val="light" role="radio" aria-checked="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                <span>Light</span>
+              </button>
+              <button type="button" class="theme-option-btn" data-theme-val="system" role="radio" aria-checked="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                <span>System</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Data Management -->
+        <div class="settings-section">
+          <h3 class="settings-section-title">Data & Storage</h3>
+          <div class="data-actions-row">
+            <button type="button" class="btn btn-outline btn-sm" id="export-all-data-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Export All Chats (JSON)</span>
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" id="clear-all-data-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <span>Clear All Chats</span>
+            </button>
+          </div>
+          <span class="setting-desc mt-2">All chats and preferences are stored locally in your browser's localStorage.</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="reset-settings-btn">Reset Defaults</button>
+        <button type="button" class="btn btn-primary" id="save-settings-btn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backend Connection Modal -->
+  <div class="modal-backdrop" id="connection-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="connection-dialog-title" hidden>
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2 class="modal-title" id="connection-dialog-title">Backend Connection</h2>
+          <p class="modal-subtitle">Local Inference Server Status</p>
+        </div>
+        <button type="button" class="icon-btn modal-close-btn" id="close-connection-modal-btn" aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="connection-status-panel">
+          <div class="status-big-indicator">
+            <span class="status-indicator-dot lg status-disconnected" id="conn-modal-dot"></span>
+            <div>
+              <h4 class="status-big-title" id="conn-modal-status-text">Disconnected</h4>
+              <p class="status-big-sub" id="conn-modal-url-text">http://127.0.0.1:8000/api/chat</p>
+            </div>
+          </div>
+
+          <div class="connection-quick-guide">
+            <h5 class="guide-title">How to start your local backend:</h5>
+            <ol class="guide-steps">
+              <li>Launch your Gemma 4 local inference server (FastAPI/vLLM/llama.cpp).</li>
+              <li>Expose an endpoint at: <code class="inline-code">http://127.0.0.1:8000/api/chat</code></li>
+              <li>Ensure CORS allows requests from this browser origin.</li>
+            </ol>
+            <div class="code-snippet-box">
+              <pre><code># Example command:
+uvicorn server:app --host 127.0.0.1 --port 8000 --reload</code></pre>
+            </div>
+          </div>
+
+          <div class="connection-ping-status" id="conn-modal-ping-feedback" hidden></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="conn-modal-settings-btn">Settings</button>
+        <button type="button" class="btn btn-primary" id="conn-modal-ping-btn">Ping Backend</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename Conversation Modal -->
+  <div class="modal-backdrop" id="rename-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="rename-dialog-title" hidden>
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2 class="modal-title" id="rename-dialog-title">Rename Conversation</h2>
+        </div>
+        <button type="button" class="icon-btn modal-close-btn" id="close-rename-modal-btn" aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="setting-item">
+          <label for="rename-input" class="setting-label">Title</label>
+          <input type="text" id="rename-input" class="form-input" maxlength="80" />
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="cancel-rename-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="save-rename-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Action Modal -->
+  <div class="modal-backdrop" id="confirm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" hidden>
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2 class="modal-title" id="confirm-dialog-title">Confirm Action</h2>
+          <p class="modal-subtitle" id="confirm-dialog-desc">Are you sure you want to proceed?</p>
+        </div>
+        <button type="button" class="icon-btn modal-close-btn" id="close-confirm-modal-btn" aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="cancel-confirm-btn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="action-confirm-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- JavaScript -->
+  <script src="./script.js"></script>
+</body>
+</html>

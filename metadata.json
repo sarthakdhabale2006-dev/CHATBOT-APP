@@ -1,0 +1,6 @@
+{
+  "name": "Local AI Chat",
+  "description": "Frontend interface for local AI models running Gemma 4 12B QAT with responsive design, session management, and settings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
