@@ -13,7 +13,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '10mb' }));
+// Support larger payloads for file uploads (up to 25MB)
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
 // CORS configuration for local development
 app.use((req, res, next) => {
@@ -30,11 +32,20 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:8000';
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'Gemma 4 12B QAT';
 const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || 
-  'You are Gemma 4 12B QAT, an advanced local AI model created by Google. You are helpful, insightful, precise, and concise. Explain technical concepts clearly. When writing code, provide complete executable examples.';
+  'You are Gemma 4 12B QAT, an advanced local AI model created by Google. You are helpful, insightful, precise, and concise. Explain technical concepts clearly. When writing code, provide complete executable examples. When files are provided, analyze and explain them accurately.';
 
 // Initialize GoogleGenAI SDK if key is present
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+
+interface AttachedFile {
+  name: string;
+  type?: string;
+  size?: number;
+  content?: string;
+  dataUrl?: string;
+  isImage?: boolean;
+}
 
 // Helper: Check if local Ollama or Python server is responding
 async function probeLocalService(url: string, timeoutMs = 250): Promise<boolean> {
@@ -47,6 +58,35 @@ async function probeLocalService(url: string, timeoutMs = 250): Promise<boolean>
   } catch {
     return false;
   }
+}
+
+// Helper: Build multimodal parts for Gemini SDK
+function buildUserParts(message: string, files?: AttachedFile[]): any[] {
+  const parts: any[] = [];
+
+  if (files && files.length > 0) {
+    for (const f of files) {
+      if (f.isImage && f.dataUrl) {
+        const base64Data = f.dataUrl.includes('base64,') ? f.dataUrl.split('base64,')[1] : f.content || '';
+        if (base64Data) {
+          parts.push({
+            inlineData: {
+              mimeType: f.type || 'image/png',
+              data: base64Data,
+            },
+          });
+          parts.push({ text: `[Attached Image: ${f.name}]` });
+        }
+      } else if (f.content) {
+        parts.push({
+          text: `[Attached File: ${f.name} (${f.type || 'text'})]\n\`\`\`\n${f.content}\n\`\`\`\n`,
+        });
+      }
+    }
+  }
+
+  parts.push({ text: message });
+  return parts;
 }
 
 // -----------------------------------------------------------------------------
@@ -81,13 +121,20 @@ app.get('/api/model', (req, res) => {
   });
 });
 
-// Helper for inference generation
-async function generateGemmaResponse(prompt: string, history: Array<{ role: string; content: string }>, customSystemPrompt?: string) {
+// Helper for inference generation with model fallback
+async function generateGemmaResponse(
+  prompt: string,
+  history: Array<{ role: string; content: string }>,
+  customSystemPrompt?: string,
+  files?: AttachedFile[]
+) {
   if (!ai) {
     return `[Gemma 4 12B QAT]: Received prompt: "${prompt}". Local inference active.`;
   }
 
   const effectiveSystem = customSystemPrompt || SYSTEM_PROMPT;
+  const userParts = buildUserParts(prompt, files);
+
   const contents = [
     ...history.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
@@ -95,7 +142,7 @@ async function generateGemmaResponse(prompt: string, history: Array<{ role: stri
     })),
     {
       role: 'user',
-      parts: [{ text: prompt }],
+      parts: userParts,
     },
   ];
 
@@ -130,27 +177,50 @@ app.post('/api/chat', async (req, res) => {
     const message = body.message || (body.messages && body.messages[body.messages.length - 1]?.content) || '';
     const history = body.history || (body.messages && body.messages.slice(0, -1)) || [];
     const systemPrompt = body.system_prompt || body.systemPrompt;
+    const files = body.files || [];
 
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ detail: 'Field "message" is required and cannot be empty.' });
+    if (!message && (!files || files.length === 0)) {
+      return res.status(400).json({ detail: 'A message or attached file is required.' });
     }
+
+    const effectiveMessage = message || (files.length > 0 ? `Please analyze the attached file: ${files[0].name}` : 'Hello');
 
     // 1. Try local Ollama if active
     const ollamaAlive = await probeLocalService(`${OLLAMA_BASE_URL}/api/tags`);
     if (ollamaAlive) {
       try {
+        let promptWithFiles = effectiveMessage;
+        const ollamaImages: string[] = [];
+
+        if (files && files.length > 0) {
+          for (const f of files) {
+            if (f.isImage && f.dataUrl) {
+              const b64 = f.dataUrl.split('base64,')[1];
+              if (b64) ollamaImages.push(b64);
+            } else if (f.content) {
+              promptWithFiles = `[Attached File: ${f.name}]\n\`\`\`\n${f.content}\n\`\`\`\n\n${promptWithFiles}`;
+            }
+          }
+        }
+
+        const ollamaPayload: any = {
+          model: body.model || 'gemma-4-12b-qat',
+          messages: [
+            { role: 'system', content: systemPrompt || SYSTEM_PROMPT },
+            ...history,
+            {
+              role: 'user',
+              content: promptWithFiles,
+              ...(ollamaImages.length > 0 ? { images: ollamaImages } : {}),
+            },
+          ],
+          stream: false,
+        };
+
         const ollamaResp = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: body.model || 'gemma-4-12b-qat',
-            messages: [
-              { role: 'system', content: systemPrompt || SYSTEM_PROMPT },
-              ...history,
-              { role: 'user', content: message },
-            ],
-            stream: false,
-          }),
+          body: JSON.stringify(ollamaPayload),
         });
         if (ollamaResp.ok) {
           const data = await ollamaResp.json();
@@ -163,7 +233,7 @@ app.post('/api/chat', async (req, res) => {
     }
 
     // 2. Generate via Gemma AI engine
-    const replyText = await generateGemmaResponse(message, history, systemPrompt);
+    const replyText = await generateGemmaResponse(effectiveMessage, history, systemPrompt, files);
     return res.json({
       reply: replyText,
       response: replyText,
@@ -182,10 +252,13 @@ app.post('/api/chat/stream', async (req, res) => {
     const message = body.message || (body.messages && body.messages[body.messages.length - 1]?.content) || '';
     const history = body.history || (body.messages && body.messages.slice(0, -1)) || [];
     const systemPrompt = body.system_prompt || body.systemPrompt;
+    const files = body.files || [];
 
-    if (!message) {
-      return res.status(400).json({ detail: 'Field "message" is required.' });
+    if (!message && (!files || files.length === 0)) {
+      return res.status(400).json({ detail: 'A message or attached file is required.' });
     }
+
+    const effectiveMessage = message || (files.length > 0 ? `Please analyze the attached file: ${files[0].name}` : 'Hello');
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -193,7 +266,7 @@ app.post('/api/chat/stream', async (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
 
     if (!ai) {
-      const fallbackText = `I am Gemma 4 12B QAT. Ready to assist you with local computation and code generation.`;
+      const fallbackText = `I am Gemma 4 12B QAT. Ready to assist you with local computation and file analysis.`;
       for (const word of fallbackText.split(' ')) {
         res.write(`data: ${JSON.stringify({ reply: word + ' ', done: false })}\n\n`);
         await new Promise(r => setTimeout(r, 40));
@@ -204,6 +277,8 @@ app.post('/api/chat/stream', async (req, res) => {
     }
 
     const effectiveSystem = systemPrompt || SYSTEM_PROMPT;
+    const userParts = buildUserParts(effectiveMessage, files);
+
     const contents = [
       ...history.map((m: any) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -211,7 +286,7 @@ app.post('/api/chat/stream', async (req, res) => {
       })),
       {
         role: 'user',
-        parts: [{ text: message }],
+        parts: userParts,
       },
     ];
 
@@ -289,7 +364,7 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
-    console.log(`⚡ API ready at /api/health and /api/chat`);
+    console.log(`⚡ API ready at /api/health and /api/chat with file upload support`);
   });
 }
 

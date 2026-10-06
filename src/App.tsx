@@ -28,10 +28,24 @@ import {
   ChevronDown,
   RotateCcw,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Paperclip,
+  FileText,
+  FileCode,
+  Image as ImageIcon
 } from 'lucide-react';
 
 // --- Interfaces & Types ---
+interface Attachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  content: string;
+  dataUrl?: string;
+  isImage: boolean;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -39,6 +53,7 @@ interface Message {
   timestamp: string;
   isStreaming?: boolean;
   error?: string | null;
+  attachments?: Attachment[];
 }
 
 interface Chat {
@@ -75,6 +90,12 @@ const STORAGE_KEY_SETTINGS = 'local_ai_settings';
 
 // Helper to generate IDs
 const generateId = () => 'chat_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 // --- Code Block Component with Copy functionality ---
 const CodeBlock: React.FC<{ code: string; language: string }> = ({ code, language }) => {
@@ -328,11 +349,86 @@ export default function App() {
   const [testResult, setTestResult] = useState<{ text: string; success?: boolean } | null>(null);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
+  // File Attachment State
+  const [attachedFiles, setAttachedFiles] = useState<Attachment[]>([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [previewImageModal, setPreviewImageModal] = useState<{ src: string; name: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Refs
   const abortControllerRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+
+  // Remove an attached file
+  const removeAttachment = (id: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.id !== id));
+  };
+
+  // Process incoming files from file picker or drag-and-drop
+  const processFiles = (files: FileList | File[]) => {
+    const maxFiles = 5;
+    const currentCount = attachedFiles.length;
+    const toProcess = Array.from(files).slice(0, maxFiles - currentCount);
+
+    if (toProcess.length === 0) {
+      showToast('Maximum 5 files per message reached');
+      return;
+    }
+
+    toProcess.forEach(file => {
+      if (file.size > 15 * 1024 * 1024) {
+        showToast(`File "${file.name}" exceeds 15MB limit`);
+        return;
+      }
+
+      const isImg = file.type.startsWith('image/');
+      const reader = new FileReader();
+
+      if (isImg) {
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          setAttachedFiles(prev => [
+            ...prev,
+            {
+              id: generateId(),
+              name: file.name,
+              type: file.type || 'image/png',
+              size: file.size,
+              content: dataUrl,
+              dataUrl,
+              isImage: true,
+            },
+          ]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        reader.onload = () => {
+          const text = reader.result as string;
+          setAttachedFiles(prev => [
+            ...prev,
+            {
+              id: generateId(),
+              name: file.name,
+              type: file.type || 'text/plain',
+              size: file.size,
+              content: text,
+              isImage: false,
+            },
+          ]);
+        };
+        reader.readAsText(file);
+      }
+    });
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFiles(e.target.files);
+      e.target.value = '';
+    }
+  };
 
   // Trigger toast
   const showToast = useCallback((msg: string) => {
@@ -416,6 +512,7 @@ export default function App() {
     async (
       chatId: string,
       historyMessages: Message[],
+      currentFiles: Attachment[] = [],
       onChunk: (chunk: string, full: string) => void,
       onComplete: (fullText: string) => void,
       onError: (errMsg: string) => void
@@ -436,6 +533,14 @@ export default function App() {
           ...(settings.systemPrompt ? [{ role: 'system', content: settings.systemPrompt }] : []),
           ...historyMessages.map(m => ({ role: m.role, content: m.content })),
         ],
+        files: currentFiles.map(f => ({
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          content: f.content,
+          dataUrl: f.dataUrl,
+          isImage: f.isImage,
+        })),
         model: settings.modelName || 'gemma-4-12b-qat',
         stream: Boolean(settings.streaming),
         temperature: settings.temperature,
@@ -587,20 +692,23 @@ export default function App() {
 
   // Send message
   const handleSendMessage = async (textToSend?: string) => {
+    const filesToSend = [...attachedFiles];
     const prompt = (textToSend || inputPrompt).trim();
-    if (!prompt || isGenerating) return;
+    if ((!prompt && filesToSend.length === 0) || isGenerating) return;
 
     if (!activeChat) return;
 
+    const displayPrompt = prompt || `Attached ${filesToSend.length} file${filesToSend.length > 1 ? 's' : ''}`;
     // Auto title if first message
     const isFirstMessage = activeChat.messages.length === 0;
-    const updatedTitle = isFirstMessage ? prompt.slice(0, 32) + (prompt.length > 32 ? '...' : '') : activeChat.title;
+    const updatedTitle = isFirstMessage ? displayPrompt.slice(0, 32) + (displayPrompt.length > 32 ? '...' : '') : activeChat.title;
 
     const userMessage: Message = {
       id: generateId(),
       role: 'user',
-      content: prompt,
+      content: prompt || (filesToSend.length > 0 ? `Please analyze the attached file: ${filesToSend[0].name}` : ''),
       timestamp: new Date().toISOString(),
+      attachments: filesToSend.length > 0 ? filesToSend : undefined,
     };
 
     const assistantMsgId = generateId();
@@ -629,6 +737,7 @@ export default function App() {
     );
 
     setInputPrompt('');
+    setAttachedFiles([]);
     setIsGenerating(true);
     setTimeout(() => scrollToBottom(), 50);
 
@@ -637,6 +746,7 @@ export default function App() {
     await sendMessageToBackend(
       activeChat.id,
       historyForBackend,
+      filesToSend,
       // onChunk
       (chunk, full) => {
         setChats(prev =>
@@ -1318,8 +1428,44 @@ export default function App() {
 
                     {/* Content Bubble */}
                     {isUser ? (
-                      <div className="px-4 py-2.5 rounded-2xl rounded-tr-sm bg-blue-600 text-white text-sm leading-relaxed whitespace-pre-wrap shadow-xs">
-                        {msg.content}
+                      <div className="flex flex-col items-end gap-1.5">
+                        {/* Attached Files display in user message */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className="flex flex-wrap justify-end gap-1.5 mb-1 max-w-full">
+                            {msg.attachments.map(att => (
+                              <div
+                                key={att.id}
+                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-blue-700/60 border border-blue-500/40 text-xs text-blue-100 shadow-xs"
+                              >
+                                {att.isImage ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewImageModal({ src: att.dataUrl || '', name: att.name })}
+                                    className="group relative cursor-pointer"
+                                    title="Click to view full image"
+                                  >
+                                    <img
+                                      src={att.dataUrl}
+                                      alt={att.name}
+                                      className="w-8 h-8 rounded object-cover border border-blue-300/40 group-hover:opacity-85 transition-opacity"
+                                    />
+                                  </button>
+                                ) : (
+                                  <div className="p-1 rounded bg-blue-800/80 border border-blue-400/30 text-blue-200">
+                                    <FileCode className="w-3.5 h-3.5" />
+                                  </div>
+                                )}
+                                <div className="flex flex-col min-w-0 max-w-[130px]">
+                                  <span className="font-medium truncate text-[11px]">{att.name}</span>
+                                  <span className="text-[9px] text-blue-200/80">{formatFileSize(att.size)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="px-4 py-2.5 rounded-2xl rounded-tr-sm bg-blue-600 text-white text-sm leading-relaxed whitespace-pre-wrap shadow-xs">
+                          {msg.content}
+                        </div>
                       </div>
                     ) : (
                       <div className="w-full text-sm leading-relaxed text-slate-200">
@@ -1441,8 +1587,62 @@ export default function App() {
                 e.preventDefault();
                 handleSendMessage();
               }}
-              className="bg-slate-900 border border-slate-800 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/20 rounded-xl p-2.5 shadow-sm transition-all"
+              onDragOver={e => {
+                e.preventDefault();
+                setIsDraggingOver(true);
+              }}
+              onDragLeave={() => setIsDraggingOver(false)}
+              onDrop={e => {
+                e.preventDefault();
+                setIsDraggingOver(false);
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                  processFiles(e.dataTransfer.files);
+                }
+              }}
+              className={`relative bg-slate-900 border ${
+                isDraggingOver ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-950/20' : 'border-slate-800'
+              } focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/20 rounded-xl p-2.5 shadow-sm transition-all`}
             >
+              {/* Drag over overlay */}
+              {isDraggingOver && (
+                <div className="absolute inset-0 bg-blue-950/80 border-2 border-dashed border-blue-400 rounded-xl flex items-center justify-center z-20 pointer-events-none">
+                  <div className="flex items-center gap-2 text-sm text-blue-300 font-medium">
+                    <Paperclip className="w-5 h-5 animate-bounce" />
+                    <span>Drop files to analyze (Code, Docs, Images)</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Render attached files preview chips */}
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2 p-1.5 bg-slate-950/60 rounded-lg border border-slate-800">
+                  {attachedFiles.map(file => (
+                    <div
+                      key={file.id}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-slate-800/90 border border-slate-700 text-xs text-slate-200"
+                    >
+                      {file.isImage ? (
+                        <img src={file.dataUrl} alt={file.name} className="w-6 h-6 rounded object-cover border border-slate-600" />
+                      ) : (
+                        <FileCode className="w-4 h-4 text-blue-400 shrink-0" />
+                      )}
+                      <div className="flex flex-col min-w-0 max-w-[140px]">
+                        <span className="truncate font-medium text-[11px]">{file.name}</span>
+                        <span className="text-[10px] text-slate-400">{formatFileSize(file.size)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(file.id)}
+                        className="text-slate-400 hover:text-red-400 p-0.5 rounded hover:bg-slate-700/50"
+                        title="Remove file"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -1454,15 +1654,36 @@ export default function App() {
                     handleSendMessage();
                   }
                 }}
-                placeholder={`Ask ${settings.modelName}... (Shift+Enter for newline)`}
+                placeholder={attachedFiles.length > 0 ? `Add a prompt or instructions for attached file(s)...` : `Ask ${settings.modelName}... (Shift+Enter for newline)`}
                 className="w-full bg-transparent border-0 resize-none text-sm text-slate-100 placeholder:text-slate-500 focus:outline-hidden min-h-[28px] max-h-[200px]"
                 aria-label="Prompt input"
               />
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 mt-1">
-                <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  <span>Local Inference</span>
+                <div className="flex items-center gap-2">
+                  {/* File Upload Input & Button */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    multiple
+                    accept=".txt,.md,.py,.js,.ts,.tsx,.jsx,.json,.csv,.html,.css,.yaml,.yml,.xml,.sql,.sh,.log,.pdf,image/*"
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-blue-400 hover:bg-slate-800 transition-colors text-xs"
+                    title="Attach files (Code, Documents, Images)"
+                    aria-label="Attach file"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                    <span className="text-[11px]">Attach</span>
+                  </button>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono hidden sm:flex">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    <span>Local Inference</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1479,7 +1700,7 @@ export default function App() {
                   ) : (
                     <button
                       type="submit"
-                      disabled={!inputPrompt.trim() || isGenerating}
+                      disabled={(!inputPrompt.trim() && attachedFiles.length === 0) || isGenerating}
                       className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white text-xs font-medium transition-all"
                       aria-label="Send message"
                     >
@@ -1910,6 +2131,50 @@ export default function App() {
               >
                 Confirm
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- IMAGE PREVIEW LIGHTBOX MODAL --- */}
+      {previewImageModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4"
+          onClick={() => setPreviewImageModal(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800">
+              <span className="text-xs font-medium text-slate-200 truncate max-w-md">{previewImageModal.name}</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewImageModal.src}
+                  download={previewImageModal.name}
+                  className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  title="Download image"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewImageModal(null)}
+                  className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  aria-label="Close image preview"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="p-3 overflow-auto flex items-center justify-center max-h-[80vh] bg-slate-950/60">
+              <img
+                src={previewImageModal.src}
+                alt={previewImageModal.name}
+                className="max-w-full max-h-[75vh] rounded-lg object-contain"
+              />
             </div>
           </div>
         </div>

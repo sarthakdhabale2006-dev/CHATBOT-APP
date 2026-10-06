@@ -87,6 +87,9 @@
 
     el.chatForm = document.getElementById('chat-form');
     el.chatInput = document.getElementById('chat-input');
+    el.chatFileInput = document.getElementById('chat-file-input');
+    el.attachFileBtn = document.getElementById('attach-file-btn');
+    el.attachedFilesContainer = document.getElementById('attached-files-container');
     el.sendBtn = document.getElementById('send-btn');
     el.stopGenBtn = document.getElementById('stop-generation-btn');
     el.footerEndpointDisplay = document.getElementById('footer-endpoint-display');
@@ -669,6 +672,7 @@
         ...(options.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
         ...messages.map(m => ({ role: m.role, content: m.content })),
       ],
+      files: options.files || [],
       model: options.modelName || 'gemma-4-12b-qat',
       stream: Boolean(options.streaming),
       temperature: Number(options.temperature ?? 0.7),

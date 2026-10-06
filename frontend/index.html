@@ -311,6 +311,9 @@
         <div class="chat-input-container">
           <form class="chat-form" id="chat-form" onsubmit="return false;">
             <div class="textarea-wrapper">
+              <!-- Attached Files Preview Container -->
+              <div class="attached-files-container" id="attached-files-container" hidden></div>
+
               <textarea
                 id="chat-input"
                 class="chat-textarea"
@@ -323,6 +326,15 @@
 
             <div class="input-actions-bar">
               <div class="input-actions-left">
+                <!-- File Attachment Input and Button -->
+                <input type="file" id="chat-file-input" multiple accept=".txt,.md,.py,.js,.ts,.tsx,.jsx,.json,.csv,.html,.css,.yaml,.yml,.xml,.sql,.sh,.log,.pdf,image/*" hidden />
+                <button type="button" class="btn btn-sm btn-outline attach-file-btn" id="attach-file-btn" title="Attach files (Code, Documents, Images)" aria-label="Attach file">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                  </svg>
+                  <span>Attach</span>
+                </button>
+
                 <!-- Status badge / quick info -->
                 <span class="input-info-hint" id="input-model-hint">
                   <span class="pulse-dot"></span> Local Inference

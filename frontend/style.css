@@ -1810,3 +1810,93 @@ html, body {
     max-width: 160px;
   }
 }
+
+/* File Attachments Styles */
+.attached-files-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.attached-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.attached-file-chip img {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.attached-file-chip .chip-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attached-file-chip .chip-size {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.attached-file-chip .remove-chip-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.attached-file-chip .remove-chip-btn:hover {
+  color: var(--danger-text);
+}
+
+.attach-file-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+
+.attach-file-btn:hover {
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.user-attachments-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+  justify-content: flex-end;
+}
+
+.user-attachment-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background-color: rgba(37, 99, 235, 0.25);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  color: #bfdbfe;
+}
